@@ -693,6 +693,7 @@ def prepare_byte_example(
     compute_merge_kind=None,
     fim_middle_id=None,
     max_compression_ratio=0.01,
+    compressor=None,
     **kwargs,
 ):
     if fim_middle_id is not None and fim_middle_id in item["input_ids"]:
@@ -716,7 +717,30 @@ def prepare_byte_example(
             [original_input_ids[1:], torch.tensor([tokenizer.hf_tokenizer.pad_token_id], dtype=original_input_ids.dtype)]
         )
 
-    byte_tokens, patch_lengths = tokenizer.get_tokens_and_patch_lengths(original_input_ids.tolist(), add_bos=True, skip_last=True)
+    if compressor is not None:
+        input_ids_list = original_input_ids.tolist()
+        compressed_ids, _, codebook = compressor.encode(input_ids_list)
+        codebook_dict = codebook.to_dict()
+
+        if tokenizer.bos_token_id is not None:
+            byte_tokens = [tokenizer.bos_token_id]
+            patch_lengths = [1]
+        else:
+            byte_tokens = []
+            patch_lengths = []
+
+        for compressed_token in compressed_ids:
+            if compressed_token in codebook_dict:
+                constituent_tokens = codebook_dict[compressed_token]
+            else:
+                constituent_tokens = [compressed_token]
+
+            token_bytes = tokenizer.patch_ids_to_byte_ids(constituent_tokens)
+            patch_lengths.append(len(token_bytes))
+            byte_tokens.extend(token_bytes)
+    else:
+        byte_tokens, patch_lengths = tokenizer.get_tokens_and_patch_lengths(original_input_ids.tolist(), add_bos=True, skip_last=True)
+
     space_patch_lengths = tokenizer.get_space_patch_lengths(byte_tokens)
     expanded_byte_tokens = tokenizer.expand_byte_ids(byte_tokens)
 
@@ -819,10 +843,23 @@ def prepare_byte_example(
     return item
 
 class NumpyByteFSLDataset(NumpyFSLDataset):
-    def __init__(self, *args, tokenizer_config: ByteTokenizerConfig, byte_sequence_length: int, **kwargs):
+    def __init__(self, *args, tokenizer_config: ByteTokenizerConfig, byte_sequence_length: int,
+                 compression_config: Optional[Dict[str, Any]] = None, **kwargs):
         super().__init__(*args, **kwargs)
         self.tokenizer = tokenizer_config.build()
         self.byte_sequence_length = byte_sequence_length
+
+        if compression_config is not None:
+            from zip2zip_compression import LZWCompressor
+            self.compressor = LZWCompressor(
+                initial_vocab_size=compression_config["initial_vocab_size"],
+                max_codebook_size=compression_config["max_codebook_size"],
+                max_subtokens=compression_config["max_subtokens"],
+                pad_token_id=compression_config["pad_token_id"],
+                disabled_ids=compression_config.get("disabled_ids"),
+            )
+        else:
+            self.compressor = None
 
         self.constituent_map = {}
         vocab = self.tokenizer.hf_tokenizer.get_vocab()
@@ -932,6 +969,7 @@ class NumpyByteFSLDataset(NumpyFSLDataset):
             pad_token_id=self.tokenizer.pad_token_id,
             compute_merge_kind=self.compute_merge_kind,
             fim_middle_id=self.fim_middle_id,
+            compressor=self.compressor,
             entropies=item["entropies"] if "entropies" in item else None,
         )
 
@@ -3166,6 +3204,9 @@ class NumpyVSLDatasetConfig(NumpyDatasetConfig):
 @dataclass
 class NumpyByteFSLDatasetConfig(NumpyFSLDatasetConfig):
     byte_sequence_length: int = 0  # needs default
+    compression_enabled: bool = False
+    compression_max_codebook_size: int = 100
+    compression_max_subtokens: int = 5
 
     def build(self) -> NumpyDatasetBase:
         self.validate()
@@ -3177,12 +3218,24 @@ class NumpyByteFSLDatasetConfig(NumpyFSLDatasetConfig):
             allow_mix=True, label_mask_paths=self.label_mask_paths
         )
 
+        compression_config = None
+        if self.compression_enabled:
+            compression_config = {
+                "initial_vocab_size": self.tokenizer.vocab_size,
+                "max_codebook_size": self.compression_max_codebook_size,
+                "max_subtokens": self.compression_max_subtokens,
+                "pad_token_id": self.tokenizer.pad_token_id,
+                "disabled_ids": [self.tokenizer.eos_token_id, self.tokenizer.pad_token_id]
+                    + ([self.tokenizer.bos_token_id] if self.tokenizer.bos_token_id is not None else []),
+            }
+
         dataset = NumpyByteFSLDataset(
             *paths,
             sequence_length=self.sequence_length,
             byte_sequence_length=self.byte_sequence_length,
             max_target_sequence_length=self.max_target_sequence_length,
             tokenizer_config=self.tokenizer,  # type: ignore
+            compression_config=compression_config,
             pad_token_id=self.tokenizer.pad_token_id,
             eos_token_id=self.tokenizer.eos_token_id,
             vocab_size=self.tokenizer.vocab_size,
