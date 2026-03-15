@@ -72,7 +72,10 @@ xlstm = [
 fla = [
     "flash-linear-attention",
 ]
-all = ["ai2-olmo-core[dev,beaker,comet,eval,torchao,transformers,wandb,mamba,xlstm,fla]"]
+compression = [
+    "zip2zip-compression",
+]
+all = ["ai2-olmo-core[dev,beaker,comet,eval,torchao,transformers,wandb,mamba,xlstm,fla,compression]"]
 
 [tool.setuptools]
 include-package-data = true
