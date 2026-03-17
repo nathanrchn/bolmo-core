@@ -1,12 +1,11 @@
 try:
     import transformer_engine.pytorch as te  # type: ignore
-except ImportError:
+    TEDotProductAttention = te.DotProductAttention
+except (ImportError, AttributeError):
     te = None
+    TEDotProductAttention = None
 
 
 def has_te_attn() -> bool:
     """Check if Transformer Engine attention is available."""
-    return te is not None
-
-
-TEDotProductAttention = te.DotProductAttention if te is not None else None
+    return te is not None and TEDotProductAttention is not None

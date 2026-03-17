@@ -3,13 +3,13 @@ SEQUENCE_LENGTH=4096 \
 DTYPE=float32 \
 DATA_SOURCE=data_sources.txt \
 OLMO_ARCH=olmo2_1B_v2 \
-OLMO_CKPT_PATH=/path/to/olmo2/ckpt \
+OLMO_CKPT_PATH=/capstor/scratch/cscs/nathanrchn/bolmo/bolmo-ckpt/olmo2-1b-distcp \
 TRAIN_MODE=stage_1 \
 LOCAL_MODEL_STYLE="hnet:xlstm" \
 ADD_HASH_EMBEDDINGS=false \
 ADD_EXPANDED_EMBEDDINGS=true \
 EMBEDDING_INIT_PATH="" \
-SAVE_FOLDER=/path/to/save/folder/$NAME \
+SAVE_FOLDER=/capstor/scratch/cscs/nathanrchn/bolmo/bolmo-checkpoints/$NAME \
 python3 src/examples/bolmo/train_stage1.py $NAME \
     train_module.bolmo_config.losses=[local_encoder,ce,local_decoder,boundary] \
     train_module.bolmo_config.loss_weights=[1,1,1,4] \

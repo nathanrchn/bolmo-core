@@ -796,6 +796,15 @@ def prepare_byte_example(
             value=False,
         )
 
+    # Pad or truncate patch_lengths and space_patch_lengths to match original_input_ids length
+    target_patch_len = len(original_input_ids)
+    if len(patch_lengths) < target_patch_len:
+        patch_lengths = F.pad(patch_lengths, (0, target_patch_len - len(patch_lengths)), value=0)
+        space_patch_lengths = F.pad(space_patch_lengths, (0, target_patch_len - len(space_patch_lengths)), value=0)
+    elif len(patch_lengths) > target_patch_len:
+        patch_lengths = patch_lengths[:target_patch_len]
+        space_patch_lengths = space_patch_lengths[:target_patch_len]
+
     item["original_input_ids"] = original_input_ids
     item["input_ids"] = new_input_ids
     item["expanded_input_ids"] = expanded_input_ids
@@ -849,17 +858,8 @@ class NumpyByteFSLDataset(NumpyFSLDataset):
         self.tokenizer = tokenizer_config.build()
         self.byte_sequence_length = byte_sequence_length
 
-        if compression_config is not None:
-            from zip2zip_compression import LZWCompressor
-            self.compressor = LZWCompressor(
-                initial_vocab_size=compression_config["initial_vocab_size"],
-                max_codebook_size=compression_config["max_codebook_size"],
-                max_subtokens=compression_config["max_subtokens"],
-                pad_token_id=compression_config["pad_token_id"],
-                disabled_ids=compression_config.get("disabled_ids"),
-            )
-        else:
-            self.compressor = None
+        self._compression_config = compression_config
+        self._compressor: Optional["LZWCompressor"] = None
 
         self.constituent_map = {}
         vocab = self.tokenizer.hf_tokenizer.get_vocab()
@@ -879,6 +879,19 @@ class NumpyByteFSLDataset(NumpyFSLDataset):
         self.fim_middle_id = self.tokenizer.hf_tokenizer.get_vocab()["<|fim_middle|>"]
         self.compute_merge_kind = None
         self._entropy_path_replace = None
+
+    @property
+    def compressor(self):
+        if self._compressor is None and self._compression_config is not None:
+            from zip2zip_compression import LZWCompressor
+            self._compressor = LZWCompressor(
+                initial_vocab_size=self._compression_config["initial_vocab_size"],
+                max_codebook_size=self._compression_config["max_codebook_size"],
+                max_subtokens=self._compression_config["max_subtokens"],
+                pad_token_id=self._compression_config["pad_token_id"],
+                disabled_ids=self._compression_config.get("disabled_ids"),
+            )
+        return self._compressor
 
     def enable_compute_merges(self, kind, **kwargs):
         self.compute_merge_kind = kind
@@ -3207,6 +3220,7 @@ class NumpyByteFSLDatasetConfig(NumpyFSLDatasetConfig):
     compression_enabled: bool = False
     compression_max_codebook_size: int = 100
     compression_max_subtokens: int = 5
+    compression_vocab_size: Optional[int] = None
 
     def build(self) -> NumpyDatasetBase:
         self.validate()
@@ -3221,7 +3235,7 @@ class NumpyByteFSLDatasetConfig(NumpyFSLDatasetConfig):
         compression_config = None
         if self.compression_enabled:
             compression_config = {
-                "initial_vocab_size": self.tokenizer.vocab_size,
+                "initial_vocab_size": self.compression_vocab_size if self.compression_vocab_size is not None else self.tokenizer.vocab_size,
                 "max_codebook_size": self.compression_max_codebook_size,
                 "max_subtokens": self.compression_max_subtokens,
                 "pad_token_id": self.tokenizer.pad_token_id,

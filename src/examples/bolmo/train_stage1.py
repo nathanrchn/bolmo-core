@@ -86,6 +86,7 @@ ADD_EXPANDED_EMBEDDINGS = os.environ.get("ADD_EXPANDED_EMBEDDINGS", "true").lowe
 COMPRESSION_ENABLED = os.environ.get("COMPRESSION_ENABLED", "false").lower() in {"1", "true", "yes"}
 COMPRESSION_MAX_CODEBOOK_SIZE = int(os.environ.get("COMPRESSION_MAX_CODEBOOK_SIZE", "100"))
 COMPRESSION_MAX_SUBTOKENS = int(os.environ.get("COMPRESSION_MAX_SUBTOKENS", "5"))
+COMPRESSION_VOCAB_SIZE = os.environ.get("COMPRESSION_VOCAB_SIZE", None)
 OLMO_ARCH = os.environ.get("OLMO_ARCH", "olmo2_1B_v2")
 
 DATA_PATHS = open(DATA_SOURCE).read().strip().splitlines()
@@ -285,6 +286,7 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
         compression_enabled=COMPRESSION_ENABLED,
         compression_max_codebook_size=COMPRESSION_MAX_CODEBOOK_SIZE,
         compression_max_subtokens=COMPRESSION_MAX_SUBTOKENS,
+        compression_vocab_size=int(COMPRESSION_VOCAB_SIZE) if COMPRESSION_VOCAB_SIZE is not None else None,
     )
 
     group_overrides = [
