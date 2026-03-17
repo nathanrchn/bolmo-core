@@ -79,6 +79,10 @@ GLOBAL_MODEL_LEARNING_RATE = os.environ.get("GLOBAL_MODEL_LEARNING_RATE", "")
 LOCAL_MODEL_STYLE = os.environ.get("LOCAL_MODEL_STYLE", "hnet:xlstm")
 DATA_SOURCE = os.environ.get("DATA_SOURCE", "data_sources.txt")
 LR_SCHEDULE = os.environ.get("LR_SCHEDULE", "linear_with_warmup")
+COMPRESSION_ENABLED = os.environ.get("COMPRESSION_ENABLED", "false").lower() in {"1", "true", "yes"}
+COMPRESSION_MAX_CODEBOOK_SIZE = int(os.environ.get("COMPRESSION_MAX_CODEBOOK_SIZE", "100"))
+COMPRESSION_MAX_SUBTOKENS = int(os.environ.get("COMPRESSION_MAX_SUBTOKENS", "5"))
+COMPRESSION_VOCAB_SIZE = os.environ.get("COMPRESSION_VOCAB_SIZE", None)
 ADD_HASH_EMBEDDINGS = os.environ.get("ADD_HASH_EMBEDDINGS", "false").lower() in {"1", "true", "yes"}
 ADD_EXPANDED_EMBEDDINGS = os.environ.get("ADD_EXPANDED_EMBEDDINGS", "true").lower() in {"1", "true", "yes"}
 OLMO_ARCH = os.environ.get("OLMO_ARCH", "olmo2_1B_v2")
@@ -284,6 +288,10 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
         byte_sequence_length=SEQUENCE_LENGTH * BYTE_EXPANSION_FACTOR,
         tokenizer=byte_tokenizer_config,
         work_dir=os.path.join(SAVE_FOLDER, "data"),
+        compression_enabled=COMPRESSION_ENABLED,
+        compression_max_codebook_size=COMPRESSION_MAX_CODEBOOK_SIZE,
+        compression_max_subtokens=COMPRESSION_MAX_SUBTOKENS,
+        compression_vocab_size=int(COMPRESSION_VOCAB_SIZE) if COMPRESSION_VOCAB_SIZE is not None else None,
     )
 
     group_overrides = [
