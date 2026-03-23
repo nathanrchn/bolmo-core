@@ -82,11 +82,20 @@ DATA_SOURCE = os.environ.get("DATA_SOURCE", "data_sources.txt")
 DTYPE = os.environ.get("DTYPE", "float32")
 LR_SCHEDULE = os.environ.get("LR_SCHEDULE", "linear_with_warmup")
 ADD_HASH_EMBEDDINGS = os.environ.get("ADD_HASH_EMBEDDINGS", "false").lower() in {"1", "true", "yes"}
-ADD_EXPANDED_EMBEDDINGS = os.environ.get("ADD_EXPANDED_EMBEDDINGS", "true").lower() in {"1", "true", "yes"}
+ADD_EXPANDED_EMBEDDINGS = os.environ.get("ADD_EXPANDED_EMBEDDINGS", "true").lower() in {
+    "1",
+    "true",
+    "yes",
+}
 COMPRESSION_ENABLED = os.environ.get("COMPRESSION_ENABLED", "false").lower() in {"1", "true", "yes"}
 COMPRESSION_MAX_CODEBOOK_SIZE = int(os.environ.get("COMPRESSION_MAX_CODEBOOK_SIZE", "100"))
 COMPRESSION_MAX_SUBTOKENS = int(os.environ.get("COMPRESSION_MAX_SUBTOKENS", "5"))
 COMPRESSION_VOCAB_SIZE = os.environ.get("COMPRESSION_VOCAB_SIZE", None)
+USE_VARLEN_GLOBAL_ATTN = os.environ.get("USE_VARLEN_GLOBAL_ATTN", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+}
 OLMO_ARCH = os.environ.get("OLMO_ARCH", "olmo2_1B_v2")
 
 DATA_PATHS = open(DATA_SOURCE).read().strip().splitlines()
@@ -96,6 +105,7 @@ STAGE1_CKPT_PATH = os.environ.get("STAGE1_CKPT_PATH", "")
 EMBEDDING_INIT_PATH = os.environ.get("EMBEDDING_INIT_PATH", "")
 
 log = logging.getLogger(__name__)
+
 
 @dataclass
 class ExperimentConfig(Config):
@@ -110,7 +120,9 @@ class ExperimentConfig(Config):
 def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
     global NUM_WORKERS, GLOBAL_BATCH_SIZE, LOCAL_BATCH_SIZE, EVAL_BATCH_SIZE
 
-    BYTE_EXPANSION_FACTOR = int(os.environ.get("BYTE_EXPANSION_FACTOR", "6"))  # default (max) expansion factor
+    BYTE_EXPANSION_FACTOR = int(
+        os.environ.get("BYTE_EXPANSION_FACTOR", "6")
+    )  # default (max) expansion factor
     SAVE_FOLDER = os.environ.get("SAVE_FOLDER", f"/tmp/{run_name}")
 
     byte_tokenizer_config = ByteTokenizerConfig.blt()
@@ -126,7 +138,7 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
     teacher_model_config = getattr(TransformerConfig, OLMO_ARCH)(
         vocab_size=subword_tokenizer_config.padded_vocab_size(),
         dtype=getattr(DType, DTYPE),
-        freeze_params=["*"], # don't train teacher
+        freeze_params=["*"],  # don't train teacher
     )
 
     if LOCAL_MODEL_STYLE == "blt":
@@ -137,7 +149,9 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
         elif OLMO_ARCH == "olmo3_7B":
             local_d_model = 4096
         else:
-            raise ValueError(f"Unknown OLMO_ARCH: {OLMO_ARCH}. Must be one of 'olmo2_1B_v2', 'olmo2_7B', 'olmo3_7B'.")
+            raise ValueError(
+                f"Unknown OLMO_ARCH: {OLMO_ARCH}. Must be one of 'olmo2_1B_v2', 'olmo2_7B', 'olmo3_7B'."
+            )
 
         local_encoder_n_layers = 1
         local_decoder_n_layers = 9
@@ -179,13 +193,15 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
         elif OLMO_ARCH == "olmo3_7B":
             local_d_model = 4096
         else:
-            raise ValueError(f"Unknown OLMO_ARCH: {OLMO_ARCH}. Must be one of 'olmo2_1B_v2', 'olmo2_7B', 'olmo3_7B'.")
+            raise ValueError(
+                f"Unknown OLMO_ARCH: {OLMO_ARCH}. Must be one of 'olmo2_1B_v2', 'olmo2_7B', 'olmo3_7B'."
+            )
 
         local_encoder_n_layers = 4
         local_decoder_n_layers = 4
         local_encoder_block = local_decoder_block = TransformerBlockConfig(
             name=TransformerBlockType.mamba,
-            attention=AttentionConfig(), # not used
+            attention=AttentionConfig(),  # not used
             mamba=MambaConfig(
                 chunk_size=256,
                 d_conv=4,
@@ -200,10 +216,10 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
         if "xlstm" in model_style_tags:
             local_encoder_block = local_decoder_block = TransformerBlockConfig(
                 name=TransformerBlockType.xlstm,
-                attention=AttentionConfig(), # not used
+                attention=AttentionConfig(),  # not used
                 xlstm=XLSTMConfig(
                     num_heads=16,
-                    dtype=teacher_model_config.dtype,              
+                    dtype=teacher_model_config.dtype,
                 ),
                 feed_forward=teacher_model_config.block.feed_forward.replace(
                     hidden_size=local_d_model * 2,
@@ -214,10 +230,10 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
         elif "xlstm_no_ffn" in model_style_tags:
             local_encoder_block = local_decoder_block = TransformerBlockConfig(
                 name=TransformerBlockType.xlstm,
-                attention=AttentionConfig(), # not used
+                attention=AttentionConfig(),  # not used
                 xlstm=XLSTMConfig(
                     num_heads=16,
-                    dtype=teacher_model_config.dtype,              
+                    dtype=teacher_model_config.dtype,
                 ),
                 feed_forward=None,
                 layer_norm=teacher_model_config.block.layer_norm,
@@ -225,7 +241,7 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
         elif "fla" in model_style_tags:
             local_encoder_block = local_decoder_block = TransformerBlockConfig(
                 name=TransformerBlockType.fla,
-                attention=AttentionConfig(), # not used,
+                attention=AttentionConfig(),  # not used,
                 fla=FLAConfig(
                     name="GatedDeltaNet",
                     dtype=teacher_model_config.dtype,
@@ -262,7 +278,9 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
             depooling="hnet",
         )
     else:
-        raise ValueError(f"Unknown LOCAL_MODEL_STYLE: {LOCAL_MODEL_STYLE}. Must be one of 'blt', 'hnet'.")
+        raise ValueError(
+            f"Unknown LOCAL_MODEL_STYLE: {LOCAL_MODEL_STYLE}. Must be one of 'blt', 'hnet'."
+        )
 
     model_config = teacher_model_config.replace(
         name=TransformerType.bolmo_distill,
@@ -272,33 +290,34 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
         teacher_config=teacher_model_config,
         share_blocks_between_teacher_and_student=True,
         freeze_params=[
-            "blocks*", # freeze all blocks
-            "teacher*" # freeze teacher params
-        ]
+            "blocks*",  # freeze all blocks
+            "teacher*",  # freeze teacher params
+        ],
     )
 
     dataset_config = NumpyByteFSLDatasetConfig(
         paths=DATA_PATHS,
-        sequence_length=SEQUENCE_LENGTH, # subword sequence length
-        byte_sequence_length=SEQUENCE_LENGTH * BYTE_EXPANSION_FACTOR, # max. length of the byte sequence
+        sequence_length=SEQUENCE_LENGTH,  # subword sequence length
+        byte_sequence_length=SEQUENCE_LENGTH
+        * BYTE_EXPANSION_FACTOR,  # max. length of the byte sequence
         tokenizer=byte_tokenizer_config,
         work_dir=os.path.join(SAVE_FOLDER, "data"),
         compression_enabled=COMPRESSION_ENABLED,
         compression_max_codebook_size=COMPRESSION_MAX_CODEBOOK_SIZE,
         compression_max_subtokens=COMPRESSION_MAX_SUBTOKENS,
-        compression_vocab_size=int(COMPRESSION_VOCAB_SIZE) if COMPRESSION_VOCAB_SIZE is not None else None,
+        compression_vocab_size=int(COMPRESSION_VOCAB_SIZE)
+        if COMPRESSION_VOCAB_SIZE is not None
+        else None,
     )
 
     group_overrides = [
         OptimGroupOverride(
             params=[
                 "local_encoder.embedding.weight",
-            ] + ([
-                "local_encoder.hash_embeddings.*.weight"
-            ] if ADD_HASH_EMBEDDINGS else []) + ([
-                "local_encoder.expanded_embeddings.weight"
-            ] if ADD_EXPANDED_EMBEDDINGS else []),
-            opts=dict(weight_decay=0.0)
+            ]
+            + (["local_encoder.hash_embeddings.*.weight"] if ADD_HASH_EMBEDDINGS else [])
+            + (["local_encoder.expanded_embeddings.weight"] if ADD_EXPANDED_EMBEDDINGS else []),
+            opts=dict(weight_decay=0.0),
         )
     ]
 
@@ -318,7 +337,9 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
         losses = ["local_decoder", "local_encoder", "teacher_ce"]
         loss_weights = [1.0, 1.0, 1.0]
     else:
-        raise ValueError(f"Unknown TRAIN_MODE: {TRAIN_MODE}. Must be one of 'stage_1', 'reverse_stage_1'.")
+        raise ValueError(
+            f"Unknown TRAIN_MODE: {TRAIN_MODE}. Must be one of 'stage_1', 'reverse_stage_1'."
+        )
 
     if LR_SCHEDULE == "linear_with_warmup":
         scheduler = LinearWithWarmup(warmup_fraction=0.1, alpha_f=0.0)
@@ -334,7 +355,9 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
     elif LR_SCHEDULE == "constant":
         scheduler = ConstantScheduler()
     else:
-        raise ValueError(f"Unknown LR_SCHEDULE: {LR_SCHEDULE}. Must be one of 'linear_with_warmup', 'wsd', 'constant'.")
+        raise ValueError(
+            f"Unknown LR_SCHEDULE: {LR_SCHEDULE}. Must be one of 'linear_with_warmup', 'wsd', 'constant'."
+        )
 
     train_module_config = TransformerTrainModuleConfig(
         rank_microbatch_size=LOCAL_BATCH_SIZE * SEQUENCE_LENGTH * BYTE_EXPANSION_FACTOR,
@@ -350,6 +373,7 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
             skip_teacher=False,
             use_student_patch_reps_for_teacher=False,
             use_oracle_patch_reps=True,
+            use_varlen_global_attn=USE_VARLEN_GLOBAL_ATTN,
         ),
         dp_config=TransformerDataParallelConfig(
             name=DataParallelType.fsdp, param_dtype=DType.bfloat16, reduce_dtype=DType.float32
@@ -432,7 +456,8 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
                 eval_interval=5000,
                 eval_on_startup=False,
                 save_results=True,
-                batch_size=EVAL_BATCH_SIZE * SEQUENCE_LENGTH, # these are subword tokens, so no expansion factor
+                batch_size=EVAL_BATCH_SIZE
+                * SEQUENCE_LENGTH,  # these are subword tokens, so no expansion factor
             ),
         )
     )
@@ -461,11 +486,13 @@ def main(run_name: str, overrides: List[str]):
     if train_module.bolmo_config.gradual_boundary_compression_kind is not None:  # type: ignore
         raise NotImplementedError("Gradual boundary compression is not implemented for stage1.")
 
-    use_byte_collator = isinstance(dataset, NumpyByteFSLDataset) or isinstance(dataset, NumpyBytePaddedFSLDataset)
+    use_byte_collator = isinstance(dataset, NumpyByteFSLDataset) or isinstance(
+        dataset, NumpyBytePaddedFSLDataset
+    )
     data_loader = config.data_loader.build(
         dataset,
         collator=ByteDataCollator(pad_token_id=dataset.pad_token_id) if use_byte_collator else None,
-        dp_process_group=train_module.dp_process_group
+        dp_process_group=train_module.dp_process_group,
     )
     trainer = config.trainer.build(train_module, data_loader)
 
@@ -478,23 +505,27 @@ def main(run_name: str, overrides: List[str]):
         random_init_keys = {"local_encoder", "boundary_predictor", "local_decoder"}
 
         key_mapping = {
-            key: None for key in model.state_dict().keys() if any(key.startswith(x) for x in random_init_keys)
+            key: None
+            for key in model.state_dict().keys()
+            if any(key.startswith(x) for x in random_init_keys)
         } | {
-            f"teacher.{key}": key for key in model.teacher.state_dict().keys()  # type: ignore
+            f"teacher.{key}": key
+            for key in model.teacher.state_dict().keys()  # type: ignore
         }
 
         incompatible_keys = load_model_and_optim_state(
-            OLMO_CKPT_PATH,
-            model,
-            key_mapping=key_mapping,
-            strict=False
+            OLMO_CKPT_PATH, model, key_mapping=key_mapping, strict=False
         )
 
         if len(incompatible_keys.unexpected_keys) > 0:
-            raise ValueError(f"Unexpected keys when loading checkpoint: {incompatible_keys.unexpected_keys} (assume we use all teacher weights)")
+            raise ValueError(
+                f"Unexpected keys when loading checkpoint: {incompatible_keys.unexpected_keys} (assume we use all teacher weights)"
+            )
 
         for missing_key in incompatible_keys.missing_keys:
-            log.info(f"Key {missing_key} was not found in checkpoint, is randomly initialized (this is expected for local encoder/decoder and student lm head).")
+            log.info(
+                f"Key {missing_key} was not found in checkpoint, is randomly initialized (this is expected for local encoder/decoder and student lm head)."
+            )
 
         # init embeddings + scale appropriately
         model.fix_init(trainer.train_module.bolmo_config, EMBEDDING_INIT_PATH or None)  # type: ignore
@@ -504,11 +535,16 @@ def main(run_name: str, overrides: List[str]):
             incompatible_keys = load_model_and_optim_state(STAGE1_CKPT_PATH, model)
         else:
             key_mapping = {
-                f"teacher.{key}": None for key in model.teacher.state_dict().keys()  # type: ignore
-            } # will be loaded in second call
+                f"teacher.{key}": None
+                for key in model.teacher.state_dict().keys()  # type: ignore
+            }  # will be loaded in second call
             # Load BOLMo checkpoint into student and OLMO checkpoint into teacher.
-            incompatible_keys = load_model_and_optim_state(STAGE1_CKPT_PATH, model, key_mapping=key_mapping, strict=False)  # type: ignore
-            incompatible_keys = load_model_and_optim_state(OLMO_CKPT_PATH, model.teacher, strict=False)  # type: ignore
+            incompatible_keys = load_model_and_optim_state(
+                STAGE1_CKPT_PATH, model, key_mapping=key_mapping, strict=False
+            )  # type: ignore
+            incompatible_keys = load_model_and_optim_state(
+                OLMO_CKPT_PATH, model.teacher, strict=False
+            )  # type: ignore
 
         log.info(f"{incompatible_keys}")
 
@@ -536,6 +572,8 @@ if __name__ == "__main__":
         print(f"An error occurred during training: {e}")
         traceback.print_exc()
         if get_rank() == 0:
-            import ipdb; ipdb.post_mortem()
+            import ipdb
+
+            ipdb.post_mortem()
     finally:
         teardown_training_environment()

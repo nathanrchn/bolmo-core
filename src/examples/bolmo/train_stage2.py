@@ -83,8 +83,17 @@ COMPRESSION_ENABLED = os.environ.get("COMPRESSION_ENABLED", "false").lower() in 
 COMPRESSION_MAX_CODEBOOK_SIZE = int(os.environ.get("COMPRESSION_MAX_CODEBOOK_SIZE", "100"))
 COMPRESSION_MAX_SUBTOKENS = int(os.environ.get("COMPRESSION_MAX_SUBTOKENS", "5"))
 COMPRESSION_VOCAB_SIZE = os.environ.get("COMPRESSION_VOCAB_SIZE", None)
+USE_VARLEN_GLOBAL_ATTN = os.environ.get("USE_VARLEN_GLOBAL_ATTN", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+}
 ADD_HASH_EMBEDDINGS = os.environ.get("ADD_HASH_EMBEDDINGS", "false").lower() in {"1", "true", "yes"}
-ADD_EXPANDED_EMBEDDINGS = os.environ.get("ADD_EXPANDED_EMBEDDINGS", "true").lower() in {"1", "true", "yes"}
+ADD_EXPANDED_EMBEDDINGS = os.environ.get("ADD_EXPANDED_EMBEDDINGS", "true").lower() in {
+    "1",
+    "true",
+    "yes",
+}
 OLMO_ARCH = os.environ.get("OLMO_ARCH", "olmo2_1B_v2")
 ENTROPY_PATH_ROOT = "entropy/"
 CROSS_ENTROPY_PATH_ROOT = "cross_entropy/"
@@ -92,10 +101,11 @@ ENTROPY_PATH_SUB = ""
 
 DATA_PATHS = open(DATA_SOURCE).read().strip().splitlines()
 
-OLMO_CKPT_PATH = os.environ.get("OLMO_CKPT_PATH", "") # for baseline
+OLMO_CKPT_PATH = os.environ.get("OLMO_CKPT_PATH", "")  # for baseline
 STAGE1_CKPT_PATH = os.environ.get("STAGE1_CKPT_PATH", "")
 
 log = logging.getLogger(__name__)
+
 
 @dataclass
 class ExperimentConfig(Config):
@@ -110,7 +120,9 @@ class ExperimentConfig(Config):
 def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
     global NUM_WORKERS, GLOBAL_BATCH_SIZE, LOCAL_BATCH_SIZE
 
-    BYTE_EXPANSION_FACTOR = int(os.environ.get("BYTE_EXPANSION_FACTOR", "6"))  # default (max) expansion factor
+    BYTE_EXPANSION_FACTOR = int(
+        os.environ.get("BYTE_EXPANSION_FACTOR", "6")
+    )  # default (max) expansion factor
     SAVE_FOLDER = os.environ.get("SAVE_FOLDER", f"/tmp/{run_name}")
 
     byte_tokenizer_config = ByteTokenizerConfig.blt()
@@ -126,7 +138,7 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
         vocab_size=subword_tokenizer_config.padded_vocab_size()
     )
     teacher_model_config = teacher_model_config.replace(
-        freeze_params=["*"] # don't train teacher
+        freeze_params=["*"]  # don't train teacher
     )
 
     if LOCAL_MODEL_STYLE == "blt":
@@ -137,7 +149,9 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
         elif OLMO_ARCH == "olmo3_7B":
             local_d_model = 4096
         else:
-            raise ValueError(f"Unknown OLMO_ARCH: {OLMO_ARCH}. Must be one of 'olmo2_1B_v2', 'olmo2_7B', 'olmo3_7B'.")
+            raise ValueError(
+                f"Unknown OLMO_ARCH: {OLMO_ARCH}. Must be one of 'olmo2_1B_v2', 'olmo2_7B', 'olmo3_7B'."
+            )
 
         local_encoder_n_layers = 1
         local_decoder_n_layers = 9
@@ -177,13 +191,15 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
         elif OLMO_ARCH == "olmo3_7B":
             local_d_model = 4096
         else:
-            raise ValueError(f"Unknown OLMO_ARCH: {OLMO_ARCH}. Must be one of 'olmo2_1B_v2', 'olmo2_7B', 'olmo3_7B'.")
+            raise ValueError(
+                f"Unknown OLMO_ARCH: {OLMO_ARCH}. Must be one of 'olmo2_1B_v2', 'olmo2_7B', 'olmo3_7B'."
+            )
 
         local_encoder_n_layers = 4
         local_decoder_n_layers = 4
         local_encoder_block = local_decoder_block = TransformerBlockConfig(
             name=TransformerBlockType.mamba,
-            attention=AttentionConfig(), # not used
+            attention=AttentionConfig(),  # not used
             mamba=MambaConfig(
                 chunk_size=256,
                 d_conv=4,
@@ -197,10 +213,10 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
         if "xlstm" in model_style_tags:
             local_encoder_block = local_decoder_block = TransformerBlockConfig(
                 name=TransformerBlockType.xlstm,
-                attention=AttentionConfig(), # not used
+                attention=AttentionConfig(),  # not used
                 xlstm=XLSTMConfig(
                     num_heads=16,
-                    dtype=teacher_model_config.dtype,              
+                    dtype=teacher_model_config.dtype,
                 ),
                 feed_forward=teacher_model_config.block.feed_forward.replace(
                     hidden_size=local_d_model * 2,
@@ -211,7 +227,7 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
         elif "fla" in model_style_tags:
             local_encoder_block = local_decoder_block = TransformerBlockConfig(
                 name=TransformerBlockType.fla,
-                attention=AttentionConfig(), # not used,
+                attention=AttentionConfig(),  # not used,
                 fla=FLAConfig(
                     name="GatedDeltaNet",
                     dtype=teacher_model_config.dtype,
@@ -248,7 +264,9 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
             depooling="hnet",
         )
     else:
-        raise ValueError(f"Unknown LOCAL_MODEL_STYLE: {LOCAL_MODEL_STYLE}. Must be one of 'blt', 'hnet'.")
+        raise ValueError(
+            f"Unknown LOCAL_MODEL_STYLE: {LOCAL_MODEL_STYLE}. Must be one of 'blt', 'hnet'."
+        )
 
     model_config = teacher_model_config.replace()
 
@@ -261,11 +279,13 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
             local_decoder=local_decoder,
         )
     elif TEACHER_MODE == "stage0":
-        pass # already set correctly
+        pass  # already set correctly
     elif TEACHER_MODE is None:
         teacher_model_config = None
     else:
-        raise ValueError(f"Unknown TEACHER_MODE: {TEACHER_MODE}. Must be one of 'stage0', 'stage1', None.")
+        raise ValueError(
+            f"Unknown TEACHER_MODE: {TEACHER_MODE}. Must be one of 'stage0', 'stage1', None."
+        )
 
     model_config = model_config.replace(
         name=TransformerType.bolmo_distill,
@@ -275,46 +295,43 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
         teacher_config=teacher_model_config,
         share_blocks_between_teacher_and_student=False,
         # use for stage1 teacher, or to take init from if no stage1 ckpt
-        use_teacher_embs_with_vocab_size=subword_tokenizer_config.padded_vocab_size() if TEACHER_MODE == "stage1" or not STAGE1_CKPT_PATH else None,
+        use_teacher_embs_with_vocab_size=subword_tokenizer_config.padded_vocab_size()
+        if TEACHER_MODE == "stage1" or not STAGE1_CKPT_PATH
+        else None,
         freeze_params=[
-            "boundary_predictor.*", # temporary
+            "boundary_predictor.*",  # temporary
             "teacher_embeddings.*",
-        ]
+        ],
     )
 
     dataset_config = NumpyByteFSLDatasetConfig(
         paths=DATA_PATHS,
-        sequence_length=SEQUENCE_LENGTH, # subword sequence length
+        sequence_length=SEQUENCE_LENGTH,  # subword sequence length
         byte_sequence_length=SEQUENCE_LENGTH * BYTE_EXPANSION_FACTOR,
         tokenizer=byte_tokenizer_config,
         work_dir=os.path.join(SAVE_FOLDER, "data"),
         compression_enabled=COMPRESSION_ENABLED,
         compression_max_codebook_size=COMPRESSION_MAX_CODEBOOK_SIZE,
         compression_max_subtokens=COMPRESSION_MAX_SUBTOKENS,
-        compression_vocab_size=int(COMPRESSION_VOCAB_SIZE) if COMPRESSION_VOCAB_SIZE is not None else None,
+        compression_vocab_size=int(COMPRESSION_VOCAB_SIZE)
+        if COMPRESSION_VOCAB_SIZE is not None
+        else None,
     )
 
     group_overrides = [
         OptimGroupOverride(
             params=[
                 "local_encoder.embedding.weight",
-            ] + ([
-                "local_encoder.hash_embeddings.*.weight"
-            ] if ADD_HASH_EMBEDDINGS else []) + ([
-                "local_encoder.expanded_embeddings.weight"
-            ] if ADD_EXPANDED_EMBEDDINGS else []),
-            opts=dict(weight_decay=0.0)
+            ]
+            + (["local_encoder.hash_embeddings.*.weight"] if ADD_HASH_EMBEDDINGS else [])
+            + (["local_encoder.expanded_embeddings.weight"] if ADD_EXPANDED_EMBEDDINGS else []),
+            opts=dict(weight_decay=0.0),
         )
     ]
 
     if GLOBAL_MODEL_LEARNING_RATE:
         group_overrides.append(
-            OptimGroupOverride(
-                params=[
-                    "blocks.*"
-                ],
-                opts=dict(lr=float(GLOBAL_MODEL_LEARNING_RATE))
-            )
+            OptimGroupOverride(params=["blocks.*"], opts=dict(lr=float(GLOBAL_MODEL_LEARNING_RATE)))
         )
 
     optim = AdamWConfig(lr=1e-3, group_overrides=group_overrides)
@@ -340,7 +357,9 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
     elif LR_SCHEDULE == "constant":
         scheduler = ConstantScheduler()
     else:
-        raise ValueError(f"Unknown LR_SCHEDULE: {LR_SCHEDULE}. Must be one of 'linear_with_warmup', 'wsd', 'constant'.")
+        raise ValueError(
+            f"Unknown LR_SCHEDULE: {LR_SCHEDULE}. Must be one of 'linear_with_warmup', 'wsd', 'constant'."
+        )
 
     train_module_config = TransformerTrainModuleConfig(
         rank_microbatch_size=LOCAL_BATCH_SIZE * SEQUENCE_LENGTH * BYTE_EXPANSION_FACTOR,
@@ -350,12 +369,13 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
         float8_config=Float8Config(enabled=False),
         bolmo_config=BolmoConfig(
             tokenizer=byte_tokenizer_config,
-            losses=["ce","boundary"],
-            loss_weights=[1.0,1.0],
+            losses=["ce", "boundary"],
+            loss_weights=[1.0, 1.0],
             skip_blocks=False,
             skip_teacher_blocks=TEACHER_MODE == "stage0",
             skip_teacher=TEACHER_MODE is None,
             use_oracle_patch_reps=False,
+            use_varlen_global_attn=USE_VARLEN_GLOBAL_ATTN,
         ),
         dp_config=TransformerDataParallelConfig(
             name=DataParallelType.fsdp, param_dtype=DType.bfloat16, reduce_dtype=DType.float32
@@ -433,7 +453,8 @@ def build_config(run_name: str, overrides: List[str]) -> ExperimentConfig:
                 eval_interval=5000,
                 eval_on_startup=False,
                 save_results=True,
-                batch_size=EVAL_BATCH_SIZE * SEQUENCE_LENGTH, # these are subword tokens, so no expansion factor
+                batch_size=EVAL_BATCH_SIZE
+                * SEQUENCE_LENGTH,  # these are subword tokens, so no expansion factor
             ),
         )
     )
@@ -461,21 +482,28 @@ def main(run_name: str, overrides: List[str]):
 
     if train_module.bolmo_config.gradual_boundary_compression_kind == "bpe":  # type: ignore
         dataset.enable_compute_merges("bpe")  # type: ignore
-    elif train_module.bolmo_config.gradual_boundary_compression_kind in {"entropy", "cross_entropy"}:  # type: ignore
+    elif train_module.bolmo_config.gradual_boundary_compression_kind in {
+        "entropy",
+        "cross_entropy",
+    }:  # type: ignore
         entropy_path_replace = (
             ENTROPY_PATH_SUB,
-            CROSS_ENTROPY_PATH_ROOT if train_module.bolmo_config.gradual_boundary_compression_kind == "cross_entropy" else ENTROPY_PATH_ROOT  # type: ignore
+            CROSS_ENTROPY_PATH_ROOT
+            if train_module.bolmo_config.gradual_boundary_compression_kind == "cross_entropy"
+            else ENTROPY_PATH_ROOT,  # type: ignore
         )
 
         dataset.enable_compute_merges(  # type: ignore
-            train_module.bolmo_config.gradual_boundary_compression_kind, # type: ignore
+            train_module.bolmo_config.gradual_boundary_compression_kind,  # type: ignore
             entropy_path_replace=entropy_path_replace,
         )
 
     data_loader = config.data_loader.build(
         dataset,
-        collator=ByteDataCollator(pad_token_id=dataset.pad_token_id) if isinstance(dataset, NumpyByteFSLDataset) else None,
-        dp_process_group=train_module.dp_process_group
+        collator=ByteDataCollator(pad_token_id=dataset.pad_token_id)
+        if isinstance(dataset, NumpyByteFSLDataset)
+        else None,
+        dp_process_group=train_module.dp_process_group,
     )
     trainer = config.trainer.build(train_module, data_loader)
 
@@ -485,7 +513,9 @@ def main(run_name: str, overrides: List[str]):
 
     if STAGE1_CKPT_PATH:
         if OLMO_CKPT_PATH:
-            raise ValueError("Cannot use both OLMO_CKPT_PATH and STAGE1_CKPT_PATH. Please set only one of them.")
+            raise ValueError(
+                "Cannot use both OLMO_CKPT_PATH and STAGE1_CKPT_PATH. Please set only one of them."
+            )
 
         # Load Stage 1 checkpoint.
         # since we can"t share blocks (we might train them), we need to duplicate the blocks to the teacher
@@ -493,40 +523,61 @@ def main(run_name: str, overrides: List[str]):
         # If we are using the stage1 checkpoint as the teacher, we also need to duplicate
         # the local encoder / decoder / boundary predictor / lm head to teacher
         if TEACHER_MODE == "stage1":
-            prefixes_to_duplicate += ["local_encoder", "local_decoder", "boundary_predictor", "lm_head"]
+            prefixes_to_duplicate += [
+                "local_encoder",
+                "local_decoder",
+                "boundary_predictor",
+                "lm_head",
+            ]
 
         key_mapping = {}
         extend_key_mapping = {}
 
         for prefix in prefixes_to_duplicate:
-            extend_key_mapping.update({
-                key: key.replace(f"{prefix}", f"teacher.{prefix}")
-                for key in model.state_dict().keys() if key.startswith(prefix)
-            })
+            extend_key_mapping.update(
+                {
+                    key: key.replace(f"{prefix}", f"teacher.{prefix}")
+                    for key in model.state_dict().keys()
+                    if key.startswith(prefix)
+                }
+            )
 
         if config.model.use_teacher_embs_with_vocab_size is not None:
             key_mapping["teacher_embeddings.weight"] = "teacher.embeddings.weight"
 
         # temporary to convert from old boundary predictor location to new
-        key_mapping |= {k: k.replace("local_encoder.", "").replace("boundary_predictor_module", "boundary_predictor") for k in model.state_dict().keys() if "boundary_predictor_module" in k}
+        key_mapping |= {
+            k: k.replace("local_encoder.", "").replace(
+                "boundary_predictor_module", "boundary_predictor"
+            )
+            for k in model.state_dict().keys()
+            if "boundary_predictor_module" in k
+        }
 
         incompatible_keys = load_model_and_optim_state(
             STAGE1_CKPT_PATH,
             model,
             key_mapping=key_mapping,
             extend_key_mapping=extend_key_mapping,
-            strict=TEACHER_MODE is not None,  # if we are not using a teacher, getting unexpected saved teacher params
+            strict=TEACHER_MODE
+            is not None,  # if we are not using a teacher, getting unexpected saved teacher params
         )
         log.info(incompatible_keys)
 
         if len(incompatible_keys.unexpected_keys) > 0:
             if TEACHER_MODE is not None:
-                raise ValueError(f"Unexpected keys when loading checkpoint: {incompatible_keys.unexpected_keys} (assume we use all teacher weights)")
+                raise ValueError(
+                    f"Unexpected keys when loading checkpoint: {incompatible_keys.unexpected_keys} (assume we use all teacher weights)"
+                )
             elif not all(key.startswith("teacher") for key in incompatible_keys.unexpected_keys):
-                raise ValueError(f"Unexpected keys when loading checkpoint: {incompatible_keys.unexpected_keys} (assume we use all student weights)")
+                raise ValueError(
+                    f"Unexpected keys when loading checkpoint: {incompatible_keys.unexpected_keys} (assume we use all student weights)"
+                )
 
         for missing_key in incompatible_keys.missing_keys:
-            log.info(f"Key {missing_key} was not found in checkpoint, is randomly initialized (this is expected for local encoder/decoder and student lm head).")
+            log.info(
+                f"Key {missing_key} was not found in checkpoint, is randomly initialized (this is expected for local encoder/decoder and student lm head)."
+            )
     else:
         # start directly from an OLMo checkpoint (no stage 1) for H-Net distill baseline.
         if not OLMO_CKPT_PATH:
@@ -538,23 +589,36 @@ def main(run_name: str, overrides: List[str]):
 
         if model.teacher is not None:
             for prefix in prefixes_to_duplicate:
-                extend_key_mapping.update({
-                    key: key.replace(f"{prefix}", f"teacher.{prefix}")
-                    for key in model.state_dict().keys() if key.startswith(prefix)
-                })
+                extend_key_mapping.update(
+                    {
+                        key: key.replace(f"{prefix}", f"teacher.{prefix}")
+                        for key in model.state_dict().keys()
+                        if key.startswith(prefix)
+                    }
+                )
 
         key_mapping = {
-            key: None for key in model.state_dict().keys() if any(key.startswith(x) for x in random_init_keys)
+            key: None
+            for key in model.state_dict().keys()
+            if any(key.startswith(x) for x in random_init_keys)
         }
         if model.teacher is not None:
-            key_mapping.update({
-                f"teacher.{key}": key for key in model.teacher.state_dict().keys() if not key.startswith("blocks")  # type: ignore
-            }) # set non-block keys (embeddings, lm head)
+            key_mapping.update(
+                {
+                    f"teacher.{key}": key
+                    for key in model.teacher.state_dict().keys()
+                    if not key.startswith("blocks")  # type: ignore
+                }
+            )  # set non-block keys (embeddings, lm head)
         else:
             no_teacher_random_init_keys = ["embeddings", "lm_head"]
-            key_mapping.update({
-                key: None for key in model.state_dict().keys() if any(key.startswith(x) for x in no_teacher_random_init_keys)
-            })
+            key_mapping.update(
+                {
+                    key: None
+                    for key in model.state_dict().keys()
+                    if any(key.startswith(x) for x in no_teacher_random_init_keys)
+                }
+            )
 
         if config.model.use_teacher_embs_with_vocab_size is not None:
             key_mapping["teacher_embeddings.weight"] = "embeddings.weight"  # type: ignore
@@ -568,10 +632,14 @@ def main(run_name: str, overrides: List[str]):
         )
 
         if len(incompatible_keys.unexpected_keys) > 0:
-            raise ValueError(f"Unexpected keys when loading checkpoint: {incompatible_keys.unexpected_keys} (assume we use all teacher weights)")
+            raise ValueError(
+                f"Unexpected keys when loading checkpoint: {incompatible_keys.unexpected_keys} (assume we use all teacher weights)"
+            )
 
         for missing_key in incompatible_keys.missing_keys:
-            log.info(f"Key {missing_key} was not found in checkpoint, is randomly initialized (this is expected for local encoder/decoder and student lm head).")
+            log.info(
+                f"Key {missing_key} was not found in checkpoint, is randomly initialized (this is expected for local encoder/decoder and student lm head)."
+            )
 
         # do not support path for heuristic embeddings for now, just rescale encoder out
         model.fix_init(trainer.train_module.bolmo_config, None)  # type: ignore
@@ -598,6 +666,8 @@ if __name__ == "__main__":
         print(f"An error occurred during training: {e}")
         traceback.print_exc()
         if get_rank() == 0:
-            import ipdb; ipdb.post_mortem()
+            import ipdb
+
+            ipdb.post_mortem()
     finally:
         teardown_training_environment()

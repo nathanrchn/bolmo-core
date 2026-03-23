@@ -6,9 +6,11 @@ from torch import nn
 from olmo_core.config import Config, DType
 from olmo_core.data.tokenizer import ByteTokenizerConfig
 
+
 @dataclass
 class BolmoConfig(Config):
     """Config for distillation into BLT."""
+
     tokenizer: Optional[ByteTokenizerConfig] = None
     losses: list[str] = field(default_factory=lambda: ["ce"])
     loss_weights: list[float] = field(default_factory=lambda: [1.0])
@@ -16,7 +18,7 @@ class BolmoConfig(Config):
     binarization_temp: float = 1.0
     temperature: float = 1.0
     div_fn: str = "tvd_temp_limit"
-    boundary_mode: str = "end" # "end", "start"
+    boundary_mode: str = "end"  # "end", "start"
     merge_boundary_loss: bool = False
     use_output_boundary_jsd: bool = False
     eval_add_boundary_logp: bool = False
@@ -43,11 +45,12 @@ class BolmoConfig(Config):
     decoder_backprop_through_boundary_predictor: bool = True
     boundary_predictor_backprop_through_encoder: bool = True
     teacher_force_boundaries: bool = True
-    boundary_threshold: str = "sample:0" # sample:<temperature> or topk:<value>
+    boundary_threshold: str = "sample:0"  # sample:<temperature> or topk:<value>
     inference_sampling_strategies: str | None = None
     xlstm_igate_bias_init: float = -10.0
     skip_boundary_before_eos: bool = True
     balance_boundary_loss: bool = False
+    use_varlen_global_attn: bool = False
 
 
 @dataclass
@@ -73,7 +76,7 @@ class LocalEncoderConfig(Config):
     represent_bytes_with_embeddings: bool = False
     represent_bytes_with_last_mixed_out: bool = False
     blt_k: Optional[int] = None  # used in blt
-    blt_compat: bool = False # for compat with BLT checkpoints
+    blt_compat: bool = False  # for compat with BLT checkpoints
     dtype: DType = DType.float32
 
     def build(self, vocab_size: int, d_global_model: int) -> nn.Module:
@@ -124,7 +127,7 @@ class LocalDecoderConfig(Config):
     hnet_smooth_ste: bool = False
     hnet_modulate: bool = True
     blt_k: Optional[int] = None  # used in blt
-    blt_compat: bool = False # for compat with BLT checkpoints
+    blt_compat: bool = False  # for compat with BLT checkpoints
     fuse_boundaries: bool = True
     no_boundaries: bool = False
     dtype: DType = DType.float32
